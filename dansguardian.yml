@@ -1,0 +1,58 @@
+---
+# Based (loosely) on https://help.ubuntu.com/community/DansGuardian
+- hosts: localhost
+  tasks:
+  - apt:
+      name: "{{ item }}"
+      state: present
+    with_items:
+    - clamav-freshclam
+    - iptables
+    - dansguardian
+    - privoxy
+
+  - lineinfile:
+      path: /etc/privoxy/config
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+      backrefs: yes
+    with_items:
+    - regexp: '^#*listen-address .*$'
+      line: 'listen-address 0.0.0.0:8118'
+    notify: "Restart Privoxy"
+
+  - lineinfile:
+      path: /etc/dansguardian/dansguardian.conf
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+      backrefs: yes
+    with_items:
+    - regexp: '^#*(UNCONFIGURED.*)$'
+      line: '#\1'
+    - regexp: '^#*filterip =(.*)$'
+      line: 'filterip = 0.0.0.0'
+    - regexp: '^#*proxyip =(.*)$'
+      line: 'proxyip = 127.0.0.1'
+    - regexp: '^#*proxyport =(.*)$'
+      line: 'proxyport = 8118'
+    - regexp: '^#*daemonuser =(.*)$'
+      line: "daemonuser = 'proxy'"
+    - regexp: '^#*daemongroup =(.*)$'
+      line: "daemongroup = 'proxy'"
+    - regexp: '^#*loglevel =(.*)$'
+      line: "loglevel = 3"
+    - regexp: '^#*accessdeniedaddress =(.*)$'
+      line: "accessdeniedaddress = 'http://localhost/cgi-bin/dansguardian.pl'"
+    notify: "Restart Dansguardian"
+
+  - file:
+      path: /var/log/dansguardian
+      owner: proxy
+      group: proxy
+    notify: "Restart Dansguardian"
+
+  handlers:
+  - name: "Restart Privoxy"
+    service: name=privoxy state=restarted
+  - name: "Restart Dansguardian"
+    service: name=dansguardian state=restarted
